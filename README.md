@@ -2,9 +2,9 @@
 
 Open typed-decision models that run in real time on a plain CPU, with little memory.
 
-- **Real time.** A decision takes 22–450 ms (median) depending on the model; the default model answers in about 70 ms.
-- **Low memory.** The models need 0.2 to 3.9 GB of RAM; the default one under 1 GB.
-- **Plain CPU.** All numbers here are on 4 cores of a server CPU, no GPU.
+- **Real time.** A decision takes 20–450 ms (median) depending on the model; the default model answers in about 65 ms (tested on my laptop's AMD Ryzen AI 9 HX PRO 370).
+- **Low memory.** The models need 0.2 to 3.8 GB of RAM; the default one under 1 GB.
+- **Plain CPU.** No GPU needed. All speed numbers here were measured on that laptop, with 4 threads.
 - **Short inputs.** A decision reads at most 512 tokens; the models are made for short texts, not long documents.
 - **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev.
 
@@ -15,10 +15,10 @@ slightly less accurate) version. They are listed largest first.
 
 | Model | Size on disk (fp32 / int8) | Median latency (fp32 / int8) | Use it for |
 |---|---|---|---|
-| **Ettin-1B** | 3.9 GB / 1.0 GB | 447 / 168 ms | the best accuracy |
-| **L** (large) | 1.5 GB / 393 MB | 194 / 80 ms | a middle ground |
-| **B** (base) | 575 MB / 153 MB | 69 / 36 ms | the default: good accuracy and fast |
-| **E** | 188 MB / 52 MB | 37 / 22 ms | the smallest footprint, least accurate |
+| **Ettin-1B** | 3.9 GB / 1.0 GB | 445 / 159 ms | the best accuracy |
+| **L** (large) | 1.5 GB / 393 MB | 182 / 73 ms | a middle ground |
+| **B** (base) | 575 MB / 153 MB | 63 / 31 ms | the default: good accuracy and fast |
+| **E** | 188 MB / 52 MB | 36 / 19 ms | the smallest footprint, least accurate |
 
 Details, all benchmark results and how to choose are in [Model details](#model-details) below.
 
@@ -165,18 +165,19 @@ changing them changes the probabilities but never the chosen option.
 
 Latency p50 is the median time per decision, p90 the time that 90% of decisions stay under.
 One decision at a time on the 100-item latency set: short to long states, all three question types, 94 tokens median.
-Hardware: 4 cores of an AMD EPYC 9654, no GPU. Latency is end to end: tokenisation, model, probabilities.
+Hardware: a laptop with an AMD Ryzen AI 9 HX PRO 370, 4 threads, no GPU; each model was run twice and the table
+shows the mean of the two runs. Latency is end to end: tokenisation, model, probabilities.
 
 | Model | Latency p50 | Latency p90 | Peak RAM | Load time |
 |---|---|---|---|---|
-| Ettin-1B | 447 ms | 1321 ms | 3.9 GB | 4.5 s |
-| L | 194 ms | 560 ms | 2.1 GB | 4.3 s |
-| B | 69 ms | 197 ms | 0.9 GB | 1.6 s |
-| E | 37 ms | 88 ms | 0.3 GB | 0.6 s |
-| Ettin-1B int8 | 168 ms | 506 ms | 1.2 GB | 1.6 s |
-| L int8 | 80 ms | 225 ms | 0.5 GB | 1.0 s |
-| B int8 | 36 ms | 102 ms | 0.3 GB | 0.7 s |
-| E int8 | 22 ms | 50 ms | 0.2 GB | 0.3 s |
+| Ettin-1B | 445 ms | 1328 ms | 3.8 GB | 1.7 s |
+| L | 182 ms | 537 ms | 2.1 GB | 1.2 s |
+| B | 63 ms | 187 ms | 0.9 GB | 0.6 s |
+| E | 36 ms | 83 ms | 0.3 GB | 0.2 s |
+| Ettin-1B int8 | 159 ms | 532 ms | 1.2 GB | 0.8 s |
+| L int8 | 73 ms | 212 ms | 0.5 GB | 0.6 s |
+| B int8 | 31 ms | 89 ms | 0.3 GB | 0.4 s |
+| E int8 | 19 ms | 45 ms | 0.2 GB | 0.2 s |
 
 For reference, not measured by us:
 - **Jev API:** 0.67 s per decision on JevBench, network included (published run).
@@ -334,7 +335,7 @@ cargo build --release      # downloads a prebuilt ONNX Runtime (1.28, static) at
 `cargo install --git https://github.com/Jibril-Frej/jev-at-home` installs `jevhome` into `~/.cargo/bin` instead.
 The build fetches ONNX Runtime from the [`ort`](https://ort.pyke.io) crate's prebuilt binaries, which exist for Linux
 (x86-64, ARM64), macOS (Apple Silicon) and Windows (x86-64). It is tested on Linux x86-64, which also covers WSL;
-the other platforms should work but are not tested yet, and the latencies above are for Linux on an AMD EPYC.
+the other platforms should work but are not tested yet, and the latencies above are for Linux on an AMD Ryzen laptop CPU.
 
 `cargo build --release --no-default-features --features dynamic` instead loads `libonnxruntime.so`
 from `ORT_DYLIB_PATH` at run time. That build was used to check that the built-in ONNX Runtime 1.28
