@@ -2,20 +2,11 @@
 
 Open typed-decision models that run in real time on a plain CPU, with little memory.
 
-[Jev](https://docs.typesafe.ai) (by TypeSafe AI) is a hosted API for **typed decisions**: you send a **state**
-(any text or JSON) and one or more **questions**, and get back probabilities instead of free text. Each question is a
-yes/no (`noul`), a pick-one (`choice`) or a graded level (`score`). This project gives you open models and a small
-server that do the same on your own machine. The models answer every question with **calibrated probabilities** in a
-single pass through the network: no text generation and no reasoning tokens.
-
 - **Real time.** A decision takes 22–450 ms (median) depending on the model; the default model answers in about 70 ms.
 - **Low memory.** The models need 0.2 to 3.9 GB of RAM; the default one under 1 GB.
 - **Plain CPU.** All numbers here are on 4 cores of a server CPU, no GPU.
 - **Short inputs.** A decision reads at most 512 tokens; the models are made for short texts, not long documents.
-- **`jevhome`** is a single 33 MB binary with ONNX Runtime built in: no Python; one `cargo build` makes it.
-- **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev and as
-  [PostHog's Jeeves](https://github.com/PostHog/jeeves) server, with the same request and response format,
-  so existing clients work unchanged.
+- **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev.
 
 ## The models
 
@@ -62,14 +53,15 @@ curl -s localhost:8009/v1/systemone -H 'content-type: application/json' -d '{
 ```json
 {"model": "jevhome-B",
  "answers": {
-   "department":  {"type": "choice", "choice": "billing", "confidence": 0.9, "probabilities": {"billing": 0.93, "technical": 0.05, "sales": 0.02}},
-   "escalate":    {"type": "noul", "noul": 0.61},
-   "frustration": {"type": "score", "score": 2.1, "legend": {"0": "calm", "1": "slightly annoyed", "2": "frustrated", "3": "furious"},
-                   "probabilities": {"0": 0.03, "1": 0.17, "2": 0.45, "3": 0.35}, "confidence": 0.74}},
- "usage": {"input_tokens": 211, "output_tokens": 160, "reasoning_tokens": 0},
- "latency_ms": 95.3}
+   "department":  {"type": "choice", "choice": "billing", "confidence": 0.73, "probabilities": {"billing": 0.82, "technical": 0.09, "sales": 0.09}},
+   "escalate":    {"type": "noul", "noul": 0.54},
+   "frustration": {"type": "score", "score": 1.74, "legend": {"0": "calm", "1": "slightly annoyed", "2": "frustrated", "3": "furious"},
+                   "probabilities": {"0": 0.13, "1": 0.19, "2": 0.47, "3": 0.2}, "confidence": 0.78}},
+ "usage": {"input_tokens": 143, "output_tokens": 0, "reasoning_tokens": 0},
+ "latency_ms": 97.6}
 ```
-<!-- TODO: replace this example output with a real response from the released B model. -->
+This is a real response from jevhome-B on a laptop (AMD Ryzen AI 9 HX PRO 370, default 4 threads), reformatted for reading.
+`output_tokens` is always 0: the models generate no text.
 
 `latency_ms` is the server-side time for the whole request, covering all its questions.
 `GET /v1/models` describes the loaded model.
@@ -89,14 +81,11 @@ The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questi
   distance from the most probable level, normalised by `k - 1`. Probabilities are rounded to 2 decimals, as in
   Jeeves.
 - **Errors.** An invalid request returns `422 {"detail": "..."}`, with the same checks and messages as Jeeves; an unknown path returns `404`.
-- **Reasoning options.** The Jeeves options `think`, `max_think`, `nothink_threshold` and `return_reasoning` are
-  accepted and ignored: these models never generate reasoning tokens.
 - **Several questions per request.** Each question is one forward pass. E reads the state separately from the questions (a bi-encoder, see
   Model details), so it encodes the state once per request, then only the questions.
 - **One request at a time.** Requests are served in order on one model instance; for more throughput, run
   several servers.
-- **Existing clients.** The Jeeves Python SDK (`jeeves_sdk`) talks to `127.0.0.1:8009` by default, so it works
-  unchanged against `jevhome serve`.
+
 
 `--threads N` sets how many CPU cores one decision uses (default 4, the setting of every number
 below). More threads help mostly on long inputs; on a small VM use 1 or 2.
@@ -274,9 +263,7 @@ rates and batch sizes differ per backbone. The training code, with the exact com
    A soup is kept only if its dev accuracy is at most 1 point below the best seed; otherwise the best seed is used.
 5. **Calibration.** One temperature per question type and number of options, fitted on a separate unfiltered dev set
    (`calibration_u.json` in each model folder).
-6. **Not released.** A larger bi-encoder (from gte-modernbert-base, 149M parameters) was trained the same way.
-   B is both faster and more accurate, so it is not released.
-7. **Export.** The models are exported to ONNX (fp32). The Python and Rust runtimes give the same answers, with probabilities equal to 1e-6.
+6. **Export.** The models are exported to ONNX (fp32). The Python and Rust runtimes give the same answers, with probabilities equal to 1e-6.
 
 ### Training data
 
