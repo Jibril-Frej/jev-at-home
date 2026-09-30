@@ -1,30 +1,48 @@
 # We have Jev at home
 
-Open, Jev-like typed-decision models that run on a plain CPU.
+Open typed-decision models that run in real time on a plain CPU, with little memory.
 
-You give a model a **state** (any text or JSON) and one or more **questions**. Each question is a
-yes/no (`noul`), a pick-one (`choice`) or a graded level (`score`). The model answers every question
-with **calibrated probabilities** in one forward pass: no generation and no reasoning tokens.
+[Jev](https://docs.typesafe.ai) (by TypeSafe AI) is a hosted API for **typed decisions**: you send a **state**
+(any text or JSON) and one or more **questions**, and get back probabilities instead of free text. Each question is a
+yes/no (`noul`), a pick-one (`choice`) or a graded level (`score`). This project gives you open models and a small
+server that do the same on your own machine. The models answer every question with **calibrated probabilities** in a
+single pass through the network: no text generation and no reasoning tokens.
 
-- **`jevhome`** is a single 33 MB binary with ONNX Runtime built in: no Python and no GPU; one `cargo build` makes it.
-- **Same API as Jev and Jeeves.** It serves the same `POST /v1/systemone` endpoint as Jev and
-  [PostHog's Jeeves](https://github.com/PostHog/jeeves), with the same request and response format,
+- **Real time.** A decision takes 22–450 ms (median) depending on the model; the default model answers in about 70 ms.
+- **Low memory.** The models need 0.2 to 3.9 GB of RAM; the default one under 1 GB.
+- **Plain CPU.** All numbers here are on 4 cores of a server CPU, no GPU.
+- **`jevhome`** is a single 33 MB binary with ONNX Runtime built in: no Python; one `cargo build` makes it.
+- **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev and as
+  [PostHog's Jeeves](https://github.com/PostHog/jeeves) server, with the same request and response format,
   so existing clients work unchanged.
-- **Fast on 4 CPU cores.** A decision takes about 35–70 ms (median, E and B) on 4 cores of a generic server CPU.
+
+## The models
+
+There are **8 models**: four sizes, each in a full-precision (fp32) and an int8 (quantised: smaller and faster,
+slightly less accurate) version. They are listed largest first.
+
+| Model | Size on disk (fp32 / int8) | Median latency (fp32 / int8) | Use it for |
+|---|---|---|---|
+| **Ettin-1B** | 3.9 GB / 1.0 GB | 447 / 168 ms | the best accuracy |
+| **L** (large) | 1.5 GB / 393 MB | 194 / 80 ms | a middle ground |
+| **B** (base) | 575 MB / 153 MB | 69 / 36 ms | the default: good accuracy and fast |
+| **E** | 188 MB / 52 MB | 37 / 22 ms | the smallest footprint, least accurate |
+
+Details, all benchmark results and how to choose are in [Model details](#model-details) below.
 
 ## Quick start
 
 ```bash
 # 1. build the binary (needs Rust: https://rustup.rs, and a C compiler)
 git clone https://github.com/Jibril-Frej/jev-at-home && cd jev-at-home
-cargo build --release && cp target/release/jevhome .
+cargo build --release
 
-# 2. a model (here B, 575 MB)
-pip install -U huggingface_hub   # or download the files by hand from the model page
+# 2. download a model (here B, the default, 575 MB)
+curl -LsSf https://hf.co/cli/install.sh | bash   # the Hugging Face `hf` CLI (standalone, no pip); or download the files from the model page
 hf download jevhome/jevhome-B --local-dir models/jevhome-B --exclude 'pytorch/*'
 
 # 3. load it once, then ask as often as you like
-./jevhome serve models/jevhome-B            # --threads 4 --port 8009 --host 127.0.0.1 are the defaults
+./target/release/jevhome serve models/jevhome-B            # --threads 4 --port 8009 --host 127.0.0.1 are the defaults
 ```
 
 ```bash
@@ -72,8 +90,8 @@ The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questi
 - **Errors.** An invalid request returns `422 {"detail": "..."}`, with the same checks and messages as Jeeves; an unknown path returns `404`.
 - **Reasoning options.** The Jeeves options `think`, `max_think`, `nothink_threshold` and `return_reasoning` are
   accepted and ignored: these models never generate reasoning tokens.
-- **Several questions per request.** Each question is one forward pass. The bi-encoder (E) encodes the state once
-  per request, then only the questions.
+- **Several questions per request.** Each question is one forward pass. E reads the state separately from the questions (a bi-encoder, see
+  Model details), so it encodes the state once per request, then only the questions.
 - **One request at a time.** Requests are served in order on one model instance; for more throughput, run
   several servers.
 - **Existing clients.** The Jeeves Python SDK (`jeeves_sdk`) talks to `127.0.0.1:8009` by default, so it works
@@ -82,7 +100,7 @@ The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questi
 `--threads N` sets how many CPU cores one decision uses (default 4, the setting of every number
 below). More threads help mostly on long inputs; on a small VM use 1 or 2.
 
-## Models
+## Model details
 
 | Model | Download | Backbone | Params | Architecture | Disk |
 |---|---|---|---|---|---|
@@ -115,6 +133,7 @@ Which model to pick:
 
 ### Speed and memory (CPU, 4 threads)
 
+Latency p50 is the median time per decision, p90 the time that 90% of decisions stay under.
 One decision at a time on the 100-item latency set: short to long states, all three question types, 94 tokens median.
 Hardware: 4 cores of an AMD EPYC 9654, no GPU. Latency is end to end: tokenisation, model, probabilities.
 <!-- Source: results/cpu-jevhome-ab, jobs 16045+16046 (both run orders averaged); int8: results/cpu-jevhome-int8, job 16067 (2 runs averaged). ORT 1.26 (dynamic build) is 1-10% faster: see Build. -->
@@ -134,6 +153,14 @@ For reference, not measured by us:
 - **Jev API:** 0.67 s per decision on JevBench, network included (published run).
 
 ### Accuracy
+
+The benchmarks:
+- **[JevBench](https://benchmarkheaven.com)** is an independent public benchmark of Jev-style decisions, in three tiers
+  (easy, standard, hard). The Jev row is its published measurement of Jev 1.13.
+- **[Laya](https://huggingface.co/convaiinnovations/laya)** (by Convai) is another family of open typed-decision models,
+  shown for comparison. Qwen3.5-4B is the large model our models learn from (the *teacher*, see training).
+- **ECE** (expected calibration error, lower is better) measures how far the probabilities are from the observed
+  accuracy.
 
 All numbers were produced by the `jevhome` binary itself (one decision at a time, the same code path as `serve`).
 The fp32 models match our PyTorch evaluation on every item (7,931 per model, probabilities within 3.1e-5).
@@ -160,7 +187,7 @@ No test set was used for training or model selection:
 - **JevBench:** accuracy (%) on the public items. ECE is the top-label calibration error on the easy and standard tiers.
 - **Other columns:**
   - TD = typed-decisions test (LocalLLaMA/typed-decisions).
-  - Auth / Pert = the SemIf authored and perturbation sets.
+  - Auth / Pert = the authored and perturbation sets of [SemIf](https://github.com/TheoLeeCJ/SemIf).
   - The rest are standard datasets turned into typed decisions.
   - Ext mean is the mean of TD through VitaminC.
 - **Procgen columns** are held-out states from our procedural generators, and are *not* in Ext mean. They show in-distribution skill.
@@ -182,7 +209,7 @@ Honest summary:
 
 ## How the models were trained
 
-All four models follow **one protocol**: same data, same losses, same selection. Only the learning
+The four fp32 models follow **one protocol**: same data, same losses, same selection. Only the learning
 rates and batch sizes differ per backbone.
 
 1. **Instruction-tuned backbone (B only).** ModernBERT-base is first instruction-tuned with the recipe of
@@ -192,8 +219,9 @@ rates and batch sizes differ per backbone.
 
    L starts from Answer.AI's ModernBERT-Large-Instruct, which was trained the same way by its authors.
    Ettin-1B and E start from their released checkpoints.
+   The int8 models are quantised from the final fp32 models after training (no extra training).
 2. **Targets.** Every training row has a gold label, and a teacher distribution from
-   [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) (bf16) read out in one pass over the option letters (SemIf-style).
+   [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) (bf16) read out in one pass over the option letters (as in SemIf).
    - The teacher reads each item twice, in the original and in reversed option order, and the two distributions are averaged.
    - A row is kept only if both orders agree on the answer, their total-variation distance is at most 0.2,
      and the teacher agrees with the gold label.
