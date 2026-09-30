@@ -1,0 +1,23 @@
+[package]
+name = "jevhome"
+version = "0.1.0"
+edition = "2021"
+description = "We have Jev at home: typed-decision models (noul/choice/score) on a CPU, with a Jev/Jeeves-compatible HTTP API"
+
+[features]
+# default: ONNX Runtime is downloaded at build time (pyke prebuilt, static) and linked into the binary
+default = ["ort/download-binaries", "ort/tls-rustls"]
+# instead load libonnxruntime.so at run time from ORT_DYLIB_PATH (e.g. to compare with the Python wheel's build)
+dynamic = ["ort/load-dynamic"]
+
+[dependencies]
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "api-26"] }
+tokenizers = { version = "0.22", default-features = false, features = ["onig"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+anyhow = "1"
+tiny_http = "0.12"
+
+[profile.release]
+lto = true
+codegen-units = 1
