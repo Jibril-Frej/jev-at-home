@@ -183,10 +183,11 @@ For reference, not measured by us:
 
 ### Accuracy
 
-Every number is **accuracy**: the percentage of questions where the model's most likely option is the right one
-(for a `score` question, the right level). All numbers were produced by the `jevhome` binary itself (one decision at a
-time, the same code path as `serve`). The fp32 models match our PyTorch evaluation on every item (7,931 per model,
-probabilities within 3.1e-5).
+The first table gives **accuracy**: the percentage of questions where the model's most likely option is the right one
+(for a `score` question, the right level). The second gives **calibration**: whether the probabilities can be trusted.
+Each column is a benchmark, described [below the tables](#the-benchmarks). All numbers were produced by the `jevhome`
+binary itself (one decision at a time, the same code path as `serve`). The fp32 models match our PyTorch evaluation on
+every item (7,931 per model, probabilities within 3.1e-5).
 
 **Models compared** (rows):
 - **Jev 1.13:** the numbers published for it; we could not run it on the other benchmarks.
@@ -195,7 +196,52 @@ probabilities within 3.1e-5).
   in its three released versions.
 - **Our models:** the four fp32 models, then their int8 versions.
 
-**Benchmarks** (columns). The number in each column header is the number of questions.
+**Accuracy (%, higher is better).** The number in each column header is the number of questions.
+Ext mean is the mean of TD through VitaminC.
+
+| Model | JevBench Easy (48) | Standard (72) | Hard (111) | TD (1660) | Auth (144) | Pert (108) | ANLI r3 (1000) | Banking77 (500) | CLINC150 (500) | SST-5 (500) | HelpSteer2 (268) | BoolQ* (1000) | VitaminC (1000) | **Ext mean** | Procgen (720) | Procgen v2 (300) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Jev 1.13 (published) | 100 | 99 | 73 | 74† | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| Qwen3.5-4B (our teacher) | 100 | 99 | 61 | 62 | 85 | 74 | 51 | 84 | 96 | 54 | 35 | 83 | 70 | 69.4 | 73 | 58 |
+| Laya | 96 | 69 | 35 | 37 | 64 | 70 | 39 | 75 | 97 | 36 | 43 | 82 | 80 | 62.3 | 43 | 43 |
+| Laya typed-decisions | 98 | 65 | 27 | 76 | 65 | 64 | 38 | 80 | 97 | 47 | 40 | 82 | 78 | 66.7 | 48 | 44 |
+| Laya multilingual | 90 | 40 | 33 | 35 | 59 | 47 | 36 | 74 | 95 | 34 | 30 | 76 | 76 | 56.3 | 42 | 39 |
+| **Ettin-1B** | 100 | 96 | 42 | 65 | 83 | 76 | 45 | 91 | 98 | 57 | 37 | 86 | 80 | **71.7** | 96 | 72 |
+| **L** | 100 | 89 | 35 | 65 | 72 | 71 | 40 | 90 | 98 | 56 | 37 | 86 | 78 | **69.4** | 92 | 72 |
+| **B** | 100 | 78 | 31 | 63 | 66 | 56 | 37 | 90 | 96 | 55 | 35 | 82 | 71 | **65.1** | 88 | 72 |
+| **E** | 92 | 67 | 25 | 59 | 53 | 33 | 34 | 90 | 96 | 37 | 35 | 65 | 60 | **56.2** | 75 | 64 |
+| Ettin-1B int8 | 98 | 93 | 42 | 65 | 80 | 71 | 41 | 90 | 97 | 56 | 35 | 86 | 78 | **70.0** | 94 | 75 |
+| L int8 | 98 | 85 | 33 | 63 | 69 | 63 | 39 | 89 | 96 | 55 | 34 | 80 | 75 | **66.4** | 88 | 72 |
+| B int8 | 98 | 75 | 32 | 60 | 69 | 44 | 38 | 86 | 93 | 47 | 32 | 74 | 68 | **61.1** | 79 | 71 |
+| E int8 | 85 | 68 | 23 | 59 | 51 | 39 | 35 | 89 | 95 | 34 | 35 | 63 | 60 | **56.0** | 74 | 65 |
+
+- **†Jev on TD:** this score comes from LangWatch on a 1,965-item version of the split; ours is a 1,660-item version,
+  so the two are not directly comparable.
+- **int8 rows:** evaluated once, on the same items, after the fp32 models were final; nothing was tuned on them.
+  Compared with its fp32 model, int8 gives the same answer on 94% of items (Ettin-1B), 91% (E), 90% (L)
+  and 83% (B).
+
+**Calibration (ECE, lower is better).** ECE (expected calibration error) measures how far the probabilities are from the
+observed accuracy: when a model says 80%, is it right about 80% of the time? We use top-label ECE (the probability of
+the chosen option against its accuracy). Ext mean is the mean over TD through VitaminC, as above.
+Jev is missing: only its accuracy is published.
+
+| Model | JevBench Easy+Standard (120) | Hard (111) | TD (1660) | Auth (144) | Pert (108) | ANLI r3 (1000) | Banking77 (500) | CLINC150 (500) | SST-5 (500) | HelpSteer2 (268) | BoolQ* (1000) | VitaminC (1000) | **Ext mean** | Procgen (720) | Procgen v2 (300) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Qwen3.5-4B (our teacher) | 0.035 | 0.116 | 0.118 | 0.068 | 0.085 | 0.291 | 0.061 | 0.010 | 0.075 | 0.273 | 0.051 | 0.140 | **0.117** | 0.096 | 0.042 |
+| Laya | 0.083 | 0.192 | 0.168 | 0.110 | 0.111 | 0.429 | 0.152 | 0.023 | 0.291 | 0.053 | 0.091 | 0.066 | **0.149** | 0.252 | 0.281 |
+| Laya typed-decisions | 0.198 | 0.171 | 0.214 | 0.131 | 0.111 | 0.325 | 0.043 | 0.008 | 0.054 | 0.057 | 0.048 | 0.055 | **0.105** | 0.116 | 0.176 |
+| Laya multilingual | 0.241 | 0.394 | 0.309 | 0.164 | 0.246 | 0.506 | 0.169 | 0.026 | 0.265 | 0.168 | 0.156 | 0.145 | **0.216** | 0.368 | 0.405 |
+| **Ettin-1B** | 0.088 | 0.224 | 0.049 | 0.060 | 0.093 | 0.298 | 0.038 | 0.010 | 0.126 | 0.229 | 0.062 | 0.035 | **0.100** | 0.030 | 0.044 |
+| **L** | 0.083 | 0.257 | 0.026 | 0.091 | 0.107 | 0.301 | 0.031 | 0.015 | 0.113 | 0.208 | 0.048 | 0.038 | **0.098** | 0.038 | 0.065 |
+| **B** | 0.084 | 0.288 | 0.043 | 0.064 | 0.108 | 0.329 | 0.019 | 0.036 | 0.149 | 0.208 | 0.033 | 0.048 | **0.104** | 0.054 | 0.063 |
+| **E** | 0.103 | 0.246 | 0.037 | 0.089 | 0.250 | 0.206 | 0.034 | 0.023 | 0.052 | 0.137 | 0.027 | 0.050 | **0.090** | 0.073 | 0.064 |
+| Ettin-1B int8 | 0.077 | 0.187 | 0.056 | 0.054 | 0.099 | 0.327 | 0.044 | 0.011 | 0.140 | 0.220 | 0.064 | 0.027 | **0.104** | 0.026 | 0.033 |
+| L int8 | 0.104 | 0.220 | 0.045 | 0.081 | 0.083 | 0.264 | 0.056 | 0.042 | 0.171 | 0.144 | 0.034 | 0.027 | **0.095** | 0.037 | 0.041 |
+| B int8 | 0.115 | 0.256 | 0.042 | 0.096 | 0.166 | 0.236 | 0.042 | 0.041 | 0.144 | 0.141 | 0.009 | 0.046 | **0.096** | 0.059 | 0.063 |
+| E int8 | 0.072 | 0.286 | 0.036 | 0.127 | 0.214 | 0.249 | 0.032 | 0.021 | 0.046 | 0.195 | 0.015 | 0.065 | **0.100** | 0.070 | 0.068 |
+
+#### The benchmarks
 
 | Column | Benchmark | Questions asked | Type |
 |---|---|---|---|
@@ -213,34 +259,9 @@ probabilities within 3.1e-5).
 
 - **Ext mean** is the mean of TD through VitaminC. The Procgen columns are left out of it, because they come from the
   same generators as part of the training data.
-- **ECE** (expected calibration error, lower is better) measures how far the probabilities are from the observed
-  accuracy: when the model says 80%, is it right about 80% of the time? It is computed **only on JevBench**, on the
-  easy and standard tiers together (top-label ECE, 120 questions).
 - **No test data in training.** JevBench, TD and SemIf are filtered out of the training data, and the other columns
   use held-out test/validation splits. \*BoolQ is the exception: about 10% of its validation passages have
   near-duplicates in the training data, so treat that column as optimistic.
-
-| Model | JevBench Easy (48) | Standard (72) | Hard (111) | ECE easy+std | TD (1660) | Auth (144) | Pert (108) | ANLI r3 (1000) | Banking77 (500) | CLINC150 (500) | SST-5 (500) | HelpSteer2 (268) | BoolQ* (1000) | VitaminC (1000) | **Ext mean** | Procgen (720) | Procgen v2 (300) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Jev 1.13 (published) | 100 | 99 | 73 | n/a | 74† | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| Qwen3.5-4B (our teacher) | 100 | 99 | 61 | 0.035 | 62 | 85 | 74 | 51 | 84 | 96 | 54 | 35 | 83 | 70 | 69.4 | 73 | 58 |
-| Laya | 96 | 69 | 35 | 0.083 | 37 | 64 | 70 | 39 | 75 | 97 | 36 | 43 | 82 | 80 | 62.3 | 43 | 43 |
-| Laya typed-decisions | 98 | 65 | 27 | 0.198 | 76 | 65 | 64 | 38 | 80 | 97 | 47 | 40 | 82 | 78 | 66.7 | 48 | 44 |
-| Laya multilingual | 90 | 40 | 33 | 0.241 | 35 | 59 | 47 | 36 | 74 | 95 | 34 | 30 | 76 | 76 | 56.3 | 42 | 39 |
-| **Ettin-1B** | 100 | 96 | 42 | 0.088 | 65 | 83 | 76 | 45 | 91 | 98 | 57 | 37 | 86 | 80 | **71.7** | 96 | 72 |
-| **L** | 100 | 89 | 35 | 0.083 | 65 | 72 | 71 | 40 | 90 | 98 | 56 | 37 | 86 | 78 | **69.4** | 92 | 72 |
-| **B** | 100 | 78 | 31 | 0.084 | 63 | 66 | 56 | 37 | 90 | 96 | 55 | 35 | 82 | 71 | **65.1** | 88 | 72 |
-| **E** | 92 | 67 | 25 | 0.103 | 59 | 53 | 33 | 34 | 90 | 96 | 37 | 35 | 65 | 60 | **56.2** | 75 | 64 |
-| Ettin-1B int8 | 98 | 93 | 42 | 0.077 | 65 | 80 | 71 | 41 | 90 | 97 | 56 | 35 | 86 | 78 | **70.0** | 94 | 75 |
-| L int8 | 98 | 85 | 33 | 0.104 | 63 | 69 | 63 | 39 | 89 | 96 | 55 | 34 | 80 | 75 | **66.4** | 88 | 72 |
-| B int8 | 98 | 75 | 32 | 0.115 | 60 | 69 | 44 | 38 | 86 | 93 | 47 | 32 | 74 | 68 | **61.1** | 79 | 71 |
-| E int8 | 85 | 68 | 23 | 0.072 | 59 | 51 | 39 | 35 | 89 | 95 | 34 | 35 | 63 | 60 | **56.0** | 74 | 65 |
-
-- **†Jev on TD:** this score comes from LangWatch on a 1,965-item version of the split; ours is a 1,660-item version,
-  so the two are not directly comparable.
-- **int8 rows:** evaluated once, on the same items, after the fp32 models were final; nothing was tuned on them.
-  Compared with its fp32 model, int8 gives the same answer on 94% of items (Ettin-1B), 91% (E), 90% (L)
-  and 83% (B).
 
 Honest summary:
 - **Short, everyday decisions:** all our fp32 models except E get the easy tier fully right. Ettin-1B is close to Jev and
@@ -249,6 +270,8 @@ Honest summary:
   one-pass encoder loses to a large model.
 - **int8:** Ettin-1B int8 loses little (1.7 points external, 2 standard-tier items). The smaller models lose more
   (L 3.1, B 4.0 external); E int8 is about as accurate as E, but drops 3 easy-tier items.
+- **Calibration:** on the external benchmarks our models are at least as well calibrated as their teacher (Ext mean
+  ECE 0.090–0.104 against 0.117). On the JevBench hard tier they are over-confident (0.19–0.29 against 0.12).
 
 ## How the models were trained
 
