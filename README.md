@@ -183,19 +183,42 @@ For reference, not measured by us:
 
 ### Accuracy
 
-The benchmarks:
-- **[JevBench](https://benchmarkheaven.com)** is an independent public benchmark of Jev-style decisions, in three tiers
-  (easy, standard, hard). The Jev row is its published measurement of Jev 1.13.
-- **[Laya](https://huggingface.co/convaiinnovations/laya)** (by Convai) is another family of open typed-decision models,
-  shown for comparison. Qwen3.5-4B is the large model our models learn from (the *teacher*, see training).
-- **ECE** (expected calibration error, lower is better) measures how far the probabilities are from the observed
-  accuracy.
+Every number is **accuracy**: the percentage of questions where the model's most likely option is the right one
+(for a `score` question, the right level). All numbers were produced by the `jevhome` binary itself (one decision at a
+time, the same code path as `serve`). The fp32 models match our PyTorch evaluation on every item (7,931 per model,
+probabilities within 3.1e-5).
 
-All numbers were produced by the `jevhome` binary itself (one decision at a time, the same code path as `serve`).
-The fp32 models match our PyTorch evaluation on every item (7,931 per model, probabilities within 3.1e-5).
-No test set was used for training or model selection:
-- **JevBench:** never trained on (training data is filtered against it).
-- **External columns:** held-out test/validation splits.
+**Models compared** (rows):
+- **Jev 1.13:** the numbers published for it; we could not run it on the other benchmarks.
+- **Qwen3.5-4B:** the large model our models learn from (the *teacher*, see [training](#how-the-models-were-trained)).
+- **[Laya](https://huggingface.co/convaiinnovations/laya)** (by Convai): another family of open typed-decision models,
+  in its three released versions.
+- **Our models:** the four fp32 models, then their int8 versions.
+
+**Benchmarks** (columns). The number in each column header is the number of questions.
+
+| Column | Benchmark | Questions asked | Type |
+|---|---|---|---|
+| JevBench Easy / Standard / Hard | [JevBench](https://benchmarkheaven.com), an independent public benchmark of Jev-style decisions, in three difficulty tiers | everyday decisions, up to multi-step reasoning over long states | all three |
+| TD | test split of [LocalLLaMA/typed-decisions](https://huggingface.co/datasets/LocalLLaMA/typed-decisions) | typed decisions written for Jev-like APIs | all three |
+| Auth / Pert | the authored set and the perturbation set of [SemIf](https://github.com/TheoLeeCJ/SemIf) | weigh evidence, apply a rule, select a candidate | choice (3) |
+| ANLI r3 | [ANLI](https://huggingface.co/datasets/facebook/anli), round 3 test | does the premise entail, contradict or not settle the hypothesis? (adversarial) | choice (3) |
+| Banking77 | [Banking77](https://huggingface.co/datasets/legacy-datasets/banking77) test | which intent is this bank-customer message? | choice (16 candidate intents) |
+| CLINC150 | [CLINC150](https://huggingface.co/datasets/DeepPavlov/clinc150) test | which intent is this assistant request, or is it out of scope? | choice (16 candidate intents) |
+| SST-5 | [SST-5](https://huggingface.co/datasets/SetFit/sst5) test | how positive is this movie-review sentence? | score (5 levels) |
+| HelpSteer2 | [HelpSteer2](https://huggingface.co/datasets/nvidia/HelpSteer2) validation | how helpful is this assistant response? | score (5 levels) |
+| BoolQ* | [BoolQ](https://huggingface.co/datasets/google/boolq) validation | does the passage answer the question with yes? | noul |
+| VitaminC | [VitaminC](https://huggingface.co/datasets/tals/vitaminc) test | does the evidence support, refute or not settle the claim? | choice (3) |
+| Procgen / Procgen v2 | held-out items from our own procedural generators (see [training data](#training-data)), with states never seen in training; v2 focuses on multi-step, trap and time/number questions | in-distribution skill | noul, choice, score |
+
+- **Ext mean** is the mean of TD through VitaminC. The Procgen columns are left out of it, because they come from the
+  same generators as part of the training data.
+- **ECE** (expected calibration error, lower is better) measures how far the probabilities are from the observed
+  accuracy: when the model says 80%, is it right about 80% of the time? It is computed **only on JevBench**, on the
+  easy and standard tiers together (top-label ECE, 120 questions).
+- **No test data in training.** JevBench, TD and SemIf are filtered out of the training data, and the other columns
+  use held-out test/validation splits. \*BoolQ is the exception: about 10% of its validation passages have
+  near-duplicates in the training data, so treat that column as optimistic.
 
 | Model | JevBench Easy (48) | Standard (72) | Hard (111) | ECE easy+std | TD (1660) | Auth (144) | Pert (108) | ANLI r3 (1000) | Banking77 (500) | CLINC150 (500) | SST-5 (500) | HelpSteer2 (268) | BoolQ* (1000) | VitaminC (1000) | **Ext mean** | Procgen (720) | Procgen v2 (300) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -213,20 +236,11 @@ No test set was used for training or model selection:
 | B int8 | 98 | 75 | 32 | 0.115 | 60 | 69 | 44 | 38 | 86 | 93 | 47 | 32 | 74 | 68 | **61.1** | 79 | 71 |
 | E int8 | 85 | 68 | 23 | 0.072 | 59 | 51 | 39 | 35 | 89 | 95 | 34 | 35 | 63 | 60 | **56.0** | 74 | 65 |
 
-- **JevBench:** accuracy (%) on the public items. ECE is the top-label calibration error on the easy and standard tiers.
-- **Other columns:**
-  - TD = typed-decisions test (LocalLLaMA/typed-decisions).
-  - Auth / Pert = the authored and perturbation sets of [SemIf](https://github.com/TheoLeeCJ/SemIf).
-  - The rest are standard datasets turned into typed decisions.
-  - Ext mean is the mean of TD through VitaminC.
-- **Procgen columns** are held-out states from our procedural generators, and are *not* in Ext mean. They show in-distribution skill.
-- **Jev:** only its published JevBench numbers exist. †: Jev's typed-decisions score comes from LangWatch on a
-  1,965-item version of the split; ours is a 1,660-item version, so the two are not directly comparable.
+- **†Jev on TD:** this score comes from LangWatch on a 1,965-item version of the split; ours is a 1,660-item version,
+  so the two are not directly comparable.
 - **int8 rows:** evaluated once, on the same items, after the fp32 models were final; nothing was tuned on them.
   Compared with its fp32 model, int8 gives the same answer on 94% of items (Ettin-1B), 91% (E), 90% (L)
   and 83% (B).
-- **\*BoolQ:** about 10% of BoolQ validation passages have near-duplicates in the training data, so treat it as
-  optimistic.
 
 Honest summary:
 - **Short, everyday decisions:** all our fp32 models except E get the easy tier fully right. Ettin-1B is close to Jev and
