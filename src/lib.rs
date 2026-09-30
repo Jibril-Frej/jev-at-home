@@ -1,11 +1,12 @@
 //! jevhome: runtime for the typed-decision models (a port of the Python inference path, same ONNX graphs).
 //!
-//! A model folder (checkpoints/onnx-slim/<model>/) holds tokenizer.json, tokenizer_config.json,
+//! A model folder (as downloaded from Hugging Face, e.g. models/jevhome-B/) holds tokenizer.json, tokenizer_config.json,
 //! decision_config.json, calibration_u.json and either model.onnx (cross-encoder, "h2") or
 //! encoder.onnx + scorer.onnx (bi-encoder, "emb"). Everything model-specific is read from those files.
 //!
-//! Ported from Python: SemIfDirectAdapter.build_request (options), decisions.render._h2_build (h2 layout),
-//! decisions.embed_model.texts_for/build_batch (emb inputs), bench_baseline.to_probs (temperature softmax).
+//! The input layouts match the training code in training/jevtrain: render.canonical_request (options),
+//! render.h2_ids (h2 layout) and embed_model.texts_for/build_batch (emb inputs); probabilities are
+//! softmax(logits / T) with the temperatures of calibration_u.json (training/fit_temperature.py).
 pub mod serve;
 
 use std::collections::HashMap;
@@ -42,7 +43,7 @@ pub struct Request {
 }
 
 impl Request {
-    /// SemIfDirectAdapter.build_request: noul = [true, false], choice = criteria order, score = "i: level".
+    /// Options as in training/jevtrain/render.canonical_request: noul = [true, false], choice = criteria order, score = "i: level".
     pub fn from_row(row: &Value) -> Result<Self> {
         Self::new(&row["state"], &row["question"])
     }
@@ -97,7 +98,7 @@ fn py_str(v: &Value) -> String {
     }
 }
 
-/// decisions.render.state_text: strings as-is, anything else as json.dumps(ensure_ascii=False).
+/// training/jevtrain/render.state_text: strings as-is, anything else as json.dumps(ensure_ascii=False).
 pub fn state_text(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
@@ -207,7 +208,7 @@ fn qtype_id(q: &str) -> i64 {
     }
 }
 
-/// decisions.adapters.bucket
+/// Temperature bucket of calibration_u.json: question type and number of options (2, 3-5, 6-10, 11+).
 fn bucket(qtype: &str, k: usize) -> String {
     let size = if k <= 2 { "2" } else if k <= 5 { "3-5" } else if k <= 10 { "6-10" } else { "11+" };
     format!("{qtype}:{size}")
@@ -313,7 +314,7 @@ impl Model {
         Ok(e.get_ids().iter().map(|&x| x as i64).collect())
     }
 
-    /// decisions.render._h2_build: [CLS] head [SEP] ([MASK] opt)* [SEP] state [SEP] -> (ids, marker positions).
+    /// training/jevtrain/render.h2_ids: [CLS] head [SEP] ([MASK] opt)* [SEP] state [SEP] -> (ids, marker positions).
     fn h2_ids(&self, r: &Request) -> Result<(Vec<i64>, Vec<i64>)> {
         let m = &self.mask_token;
         let ins = r.question.replace(m.as_str(), " ");
@@ -413,7 +414,7 @@ impl Model {
         Ok((l.to_vec(), Encoded { ids: s.ids.clone(), query_ids: unpadded }))
     }
 
-    /// bench_baseline.to_probs: softmax of logits / T(bucket).
+    /// Probabilities: softmax of logits / T(bucket).
     fn calibrate(&self, r: &Request, logits: &[f32]) -> Vec<f32> {
         let t = *self.temps.get(&bucket(&r.qtype, r.options.len())).unwrap_or(&1.0);
         let z: Vec<f32> = logits.iter().map(|x| x / t).collect();

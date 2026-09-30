@@ -1,6 +1,6 @@
 //! jevhome serve <model_dir> [--port 8009] [--host 127.0.0.1] [--threads 4]   HTTP API (POST /v1/systemone, GET /v1/models)
 //! jevhome probe <model_dir> <items.jsonl> <out.jsonl> [threads]   one decision per item, one at a time
-//! jevhome bench <model_dir> <items.jsonl> <out_dir> [threads]    the bench_baseline.run_one protocol (single decisions only)
+//! jevhome bench <model_dir> <items.jsonl> <out_dir> [threads]    latency benchmark (single decisions only)
 //! jevhome statetext <items.jsonl>                                 state_text() of every row (JSON string per line)
 use std::io::{BufRead, Write};
 use std::time::Instant;
@@ -27,7 +27,7 @@ fn status_mb(key: &str) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Median as statistics.median, other percentiles as bench_baseline.pct (nearest rank).
+/// Median as Python's statistics.median, other percentiles by nearest rank.
 fn pct(xs: &[f64], q: f64) -> f64 {
     let mut v = xs.to_vec();
     v.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
             let ready_ms = t0.elapsed().as_secs_f64() * 1000.0;
             let rss_loaded = status_mb("VmRSS:");
             if a[3] == "-" {
-                // streaming mode (eval_decisions.py --adapter jevhome): one task per stdin line, one answer per
+                // streaming mode (items path "-"): one task per stdin line, one answer per
                 // stdout line, flushed at once; the load statistics go to stderr
                 let mut stdout = std::io::stdout().lock();
                 for line in std::io::stdin().lock().lines() {
@@ -95,7 +95,7 @@ fn main() -> Result<()> {
                                   "rss_end_mb": status_mb("VmRSS:"), "peak_rss_mb": status_mb("VmHWM:")}));
         }
         Some("bench") => {
-            // bench_baseline.run_one protocol: load, 1 cold decision, 10 warm-ups (items[(i*7)%n]), then every item
+            // benchmark protocol: load, 1 cold decision, 10 warm-ups (items[(i*7)%n]), then every item
             // once, timed end to end (tokenisation, request building, ONNX run(s), calibrated probabilities).
             // No batch-8 pass: the Rust runtime decides one item at a time.
             init_ort()?;
