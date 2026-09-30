@@ -255,6 +255,10 @@ rates and batch sizes differ per backbone. The training code, with the exact com
    - The teacher reads each item twice, in the original and in reversed option order, and the two distributions are averaged.
    - A row is kept only if both orders agree on the answer, their total-variation distance is at most 0.2,
      and the teacher agrees with the gold label.
+   - **Why a teacher and not only the gold label?** A gold label says only which answer is right, as if every
+     case were certain, so a model trained on it alone learns to be over-confident. The teacher's probabilities also
+     say how clear-cut each case is, so the model learns to give lower probabilities to ambiguous cases. That makes
+     its probabilities more trustworthy (lower ECE, see [Accuracy](#accuracy)).
 3. **Loss.** Cross-entropy on the gold label plus KL to the teacher distribution, with weight decay 0.1, 3 epochs and warm-up 5%.
    - **Distractor augmentation:** 30% of rows get irrelevant text added to the state, to teach the model to ignore it.
    - **Cross-encoders only:** option-order permutation of choice questions, and 20% replay of the FLAN
