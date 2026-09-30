@@ -11,6 +11,7 @@ single pass through the network: no text generation and no reasoning tokens.
 - **Real time.** A decision takes 22–450 ms (median) depending on the model; the default model answers in about 70 ms.
 - **Low memory.** The models need 0.2 to 3.9 GB of RAM; the default one under 1 GB.
 - **Plain CPU.** All numbers here are on 4 cores of a server CPU, no GPU.
+- **Short inputs.** A decision reads at most 512 tokens; the models are made for short texts, not long documents.
 - **`jevhome`** is a single 33 MB binary with ONNX Runtime built in: no Python; one `cargo build` makes it.
 - **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev and as
   [PostHog's Jeeves](https://github.com/PostHog/jeeves) server, with the same request and response format,
@@ -113,10 +114,9 @@ below). More threads help mostly on long inputs; on a small VM use 1 or 2.
 | **B int8** | [jevhome/jevhome-B-int8](https://huggingface.co/jevhome/jevhome-B-int8) | B, int8 | ~150M | cross-encoder | 153 MB |
 | **E int8** | [jevhome/jevhome-E-int8](https://huggingface.co/jevhome/jevhome-E-int8) | E, int8 | ~48M | bi-encoder | 52 MB |
 
-- **Cross-encoders** (Ettin-1B, L, B) read the question, every option and the state in one sequence of up to 512 tokens.
-  A small head scores the option markers.
-- **The bi-encoder** (E) encodes the state (up to 512 tokens) and each question+option (up to 160 tokens)
-  separately, and a small MLP scores each pair. It is the fastest and smallest model, but the least accurate.
+- **Cross-encoders** (Ettin-1B, L, B) read the question, every option and the state together, in one sequence.
+- **The bi-encoder** (E) reads the state and each option separately. It is the fastest and smallest model, but the
+  least accurate. Both are explained under [How the models compute probabilities](#how-the-models-compute-probabilities).
 - **Parameter counts** are estimated from the fp32 weight files.
 - **Disk** is the model folder (ONNX weights, tokenizer, configs) in MiB/GiB.
 - **int8 models** are the same networks with dynamic int8 quantisation (ONNX Runtime `quantize_dynamic`: int8
@@ -131,12 +131,52 @@ Which model to pick:
 - **B int8** is for speed: as fast as E and clearly more accurate.
 - **E** / **E int8** are for the smallest footprint (under 200 MB of RAM for the int8 version).
 
+### How the models compute probabilities
+
+The backbones are standard text encoders (BERT-style). We keep each encoder as it is and add a small head on top.
+The head gives one number (a *logit*) per option; the probabilities are a softmax over the options of the question,
+with a temperature: `p = softmax(logits / T)`. A `noul` answer is the probability of the `true` option; a `score`
+answer is the expected level, the sum of `level × probability`.
+
+**Cross-encoders (Ettin-1B, L, B).** The question, the options and the state are one token sequence of at most
+512 tokens, with a `[MASK]` token in front of each option:
+
+```
+[CLS] choice question: Which team should handle this ticket? [SEP]
+      [MASK] billing: payments, invoices, refunds [MASK] technical: bugs and errors [MASK] sales: sales
+      [SEP] I was charged twice for my subscription this month ... [SEP]
+```
+
+Each option is written as `id: description` (the id again when there is no description). A `noul` question has the
+two options `true: The proposition is true.` and `false: The proposition is false.` (or your own descriptions), and a
+`score` question one option per level: `0: calm`, `1: slightly annoyed`, ...
+
+- The `[MASK]` tokens are only markers. The encoder's output vector at each marker summarises its option, read
+  together with the question and the state.
+- Changes to the base model: the masked-language-model output layer (which predicts a word at `[MASK]`) is not used
+  for decisions. We add a **question-type vector** (one each for `choice`, `score` and `noul`), added to every
+  output vector, and a **scorer**, a two-layer MLP (LayerNorm, Linear, GELU, Linear to 1 value) applied at each marker.
+  Its output is the option's logit. This adds 0.6M (B) to 3.2M (Ettin-1B) parameters.
+- The word-prediction layer is kept only during training, on the FLAN replay batches (see training).
+
+**Bi-encoder (E).** The state and the options never share a sequence:
+
+- The state is encoded alone (at most 512 tokens) into one vector `s` (the `[CLS]` output).
+- Each option is encoded as the pair `"<type> question: <instructions>"` + option text (at most 160 tokens) into
+  one vector `q`.
+- A scorer MLP reads `[s, q, s × q, |s − q|]` and gives the option's logit. This adds 0.6M parameters; the encoder is unchanged.
+- Because the state does not depend on the question, several questions about one state need only one state
+  encoding. The price is accuracy on questions that need close reading of the state.
+
+**Temperatures.** `T` is fitted after training on the calibration split of the dataset, one per question type and
+number of options (2, 3–5, 6–10, 11+), by minimising the log-loss. They are stored in `calibration_u.json`, so
+changing them changes the probabilities but never the chosen option.
+
 ### Speed and memory (CPU, 4 threads)
 
 Latency p50 is the median time per decision, p90 the time that 90% of decisions stay under.
 One decision at a time on the 100-item latency set: short to long states, all three question types, 94 tokens median.
 Hardware: 4 cores of an AMD EPYC 9654, no GPU. Latency is end to end: tokenisation, model, probabilities.
-<!-- Source: results/cpu-jevhome-ab, jobs 16045+16046 (both run orders averaged); int8: results/cpu-jevhome-int8, job 16067 (2 runs averaged). ORT 1.26 (dynamic build) is 1-10% faster: see Build. -->
 
 | Model | Latency p50 | Latency p90 | Peak RAM | Load time |
 |---|---|---|---|---|
@@ -210,7 +250,8 @@ Honest summary:
 ## How the models were trained
 
 The four fp32 models follow **one protocol**: same data, same losses, same selection. Only the learning
-rates and batch sizes differ per backbone.
+rates and batch sizes differ per backbone. The training code, with the exact command for each model, is in
+[`training/`](training/README.md).
 
 1. **Instruction-tuned backbone (B only).** ModernBERT-base is first instruction-tuned with the recipe of
    [*It's All in The [MASK]*](https://arxiv.org/abs/2502.03793) (Clavié, Cooper, Warner 2025):
@@ -276,7 +317,7 @@ Other subcommands: `jevhome probe` (decisions for a JSONL file) and `jevhome ben
 ## Limitations
 
 - **English only.**
-- **Input length.** States longer than 512 tokens are truncated.
+- **Input length.** At most 512 tokens per decision; a longer state is cut. Not made for long texts.
 - **Hard reasoning.** The models are far from Jev on the hard tier (multi-step reasoning, long states, tricky wording).
 - **Calibration.** Probabilities are calibrated on our dev data; check them on your own data before thresholding.
 - **Upstream data.** See the backbones' model cards for the data they were pre-trained on.

@@ -1,0 +1,10 @@
+# versions used for the released models (Python 3.12, one NVIDIA A100 40GB, CUDA 13)
+torch==2.14.0
+transformers==5.10.2
+tokenizers==0.22.2
+numpy==2.5.3
+pyarrow==25.0.1
+safetensors==0.8.0
+huggingface-hub==1.32.0
+onnx==1.23.0
+onnxruntime==1.26.0
