@@ -257,6 +257,6 @@ Other subcommands: `jevhome probe` (decisions for a JSONL file) and `jevhome ben
 
 - **Model weights and dataset:** CC BY-NC 4.0 (non-commercial). Several training sources are
   non-commercial or share-alike; see the dataset card.
-- **Code:** LICENCE_TBD.
+- **Code:** MIT (see [LICENSE](LICENSE)).
 
 This is an independent project. It is not affiliated with TypeSafe AI (Jev), PostHog (Jeeves) or Convai (Laya).

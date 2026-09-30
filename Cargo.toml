@@ -3,6 +3,7 @@ name = "jevhome"
 version = "0.1.0"
 edition = "2021"
 description = "We have Jev at home: typed-decision models (noul/choice/score) on a CPU, with a Jev/Jeeves-compatible HTTP API"
+license = "MIT"
 
 [features]
 # default: ONNX Runtime is downloaded at build time (pyke prebuilt, static) and linked into the binary
