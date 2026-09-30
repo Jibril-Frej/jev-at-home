@@ -181,11 +181,10 @@ fn systemone(m: &mut Model, name: &str, body: &str) -> Result<Reply> {
     let ms = t0.elapsed().as_secs_f64() * 1000.0;
     let answers: Map<String, Value> = qs.iter().zip(&res).map(|((qid, q), (r, p, _))| (qid.clone(), answer(r, q, p))).collect();
     let answers = Value::Object(answers);
-    let out_tokens = m.count_tokens(&py_json(&answers));
     Ok(Reply::Ok(json!({
         "model": model,
         "answers": answers,
-        "usage": {"input_tokens": res.iter().map(|x| x.2).sum::<usize>(), "output_tokens": out_tokens, "reasoning_tokens": 0},
+        "usage": {"input_tokens": res.iter().map(|x| x.2).sum::<usize>(), "output_tokens": 0, "reasoning_tokens": 0},
         "latency_ms": (ms * 10.0).round() / 10.0,
     })))
 }
