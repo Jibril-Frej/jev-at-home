@@ -1,7 +1,7 @@
 """Rewrite the table of contents in README.md between <!-- toc --> and <!-- tocstop -->.
 
 Run automatically by the git pre-commit hook (see the script's install note below).
-Lists every ## to #### heading (the # title is skipped), with GitHub's anchor links.
+Lists every ## to #### heading (the # title and this table's own heading are skipped), with GitHub's anchor links.
 Run: python3 scripts/readme_toc.py [README.md]
 """
 import re
@@ -19,6 +19,8 @@ for line in text.splitlines():
     if not m:
         continue
     title = m.group(2)
+    if title == "Table of contents":
+        continue
     # GitHub anchors: lowercase, drop punctuation except - and _, spaces to -
     slug = re.sub(r"[^\w\- ]", "", title.lower()).replace(" ", "-")
     n = seen.get(slug, 0)

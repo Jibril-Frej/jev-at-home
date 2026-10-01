@@ -8,6 +8,26 @@ Open typed-decision models that run in real time on a plain CPU, with little mem
 - **Short inputs.** A decision reads at most 512 tokens; the models are made for short texts, not long documents.
 - **Same API as Jev.** It serves the same `POST /v1/systemone` endpoint as Jev.
 
+## Table of contents
+
+<!-- toc -->
+
+- [The models](#the-models)
+- [Quick start](#quick-start)
+- [API](#api)
+- [Model details](#model-details)
+  - [How the models compute probabilities](#how-the-models-compute-probabilities)
+  - [Speed and memory (CPU, 4 threads)](#speed-and-memory-cpu-4-threads)
+  - [Accuracy](#accuracy)
+    - [The benchmarks](#the-benchmarks)
+- [How the models were trained](#how-the-models-were-trained)
+  - [Training data](#training-data)
+- [Build](#build)
+- [Limitations](#limitations)
+- [Licence](#licence)
+
+<!-- tocstop -->
+
 ## The models
 
 There are **8 models**: four sizes, each in a full-precision (fp32) and an int8 (quantised: smaller and faster,
@@ -77,26 +97,6 @@ done
 ```
 
 Remove `--exclude 'pytorch/*'` to also get the PyTorch weights of the fp32 models (only needed for further training).
-
-**Contents**
-
-<!-- toc -->
-
-- [The models](#the-models)
-- [Quick start](#quick-start)
-- [API](#api)
-- [Model details](#model-details)
-  - [How the models compute probabilities](#how-the-models-compute-probabilities)
-  - [Speed and memory (CPU, 4 threads)](#speed-and-memory-cpu-4-threads)
-  - [Accuracy](#accuracy)
-    - [The benchmarks](#the-benchmarks)
-- [How the models were trained](#how-the-models-were-trained)
-  - [Training data](#training-data)
-- [Build](#build)
-- [Limitations](#limitations)
-- [Licence](#licence)
-
-<!-- tocstop -->
 
 ## API
 
