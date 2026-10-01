@@ -66,6 +66,38 @@ This is a real response from jevhome-B on a laptop (AMD Ryzen AI 9 HX PRO 370, d
 `latency_ms` is the server-side time for the whole request, covering all its questions.
 `GET /v1/models` describes the loaded model.
 
+To download all 8 models at once (`hf download` takes one repository at a time):
+
+```bash
+for m in ettin-1b L B E; do
+  for v in "" -int8; do
+    hf download jevhome/jevhome-$m$v --exclude 'pytorch/*' --local-dir models/jevhome-$m$v
+  done
+done
+```
+
+Remove `--exclude 'pytorch/*'` to also get the PyTorch weights of the fp32 models (only needed for further training).
+
+**Contents**
+
+<!-- toc -->
+
+- [The models](#the-models)
+- [Quick start](#quick-start)
+- [API](#api)
+- [Model details](#model-details)
+  - [How the models compute probabilities](#how-the-models-compute-probabilities)
+  - [Speed and memory (CPU, 4 threads)](#speed-and-memory-cpu-4-threads)
+  - [Accuracy](#accuracy)
+    - [The benchmarks](#the-benchmarks)
+- [How the models were trained](#how-the-models-were-trained)
+  - [Training data](#training-data)
+- [Build](#build)
+- [Limitations](#limitations)
+- [Licence](#licence)
+
+<!-- tocstop -->
+
 ## API
 
 The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questions` object;
