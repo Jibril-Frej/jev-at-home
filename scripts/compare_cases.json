@@ -1,0 +1,15 @@
+{
+  "states": {
+    "calm": "Hi, I think I was charged twice for my subscription this month. Could you check when you have a moment? Thanks!",
+    "slightly_annoyed": "I was charged twice for my subscription this month and nobody answers my emails.",
+    "frustrated": "This is the third time I write about being charged twice this month. Nobody answers and I am getting really fed up.",
+    "furious": "UNACCEPTABLE. You charged me TWICE, ignored every email for two weeks, and I am done. Refund me NOW or I am calling my bank and my lawyer."
+  },
+  "questions": {
+    "department": {"type": "choice", "instructions": "Which team should handle this ticket?",
+                   "criteria": {"billing": "payments, invoices, refunds", "technical": "bugs and errors", "sales": null}},
+    "escalate": {"type": "noul", "instructions": "Should this be escalated to a human manager?"},
+    "frustration": {"type": "score", "instructions": "How frustrated is the customer?",
+                    "criteria": ["calm", "slightly annoyed", "frustrated", "furious"]}
+  }
+}
