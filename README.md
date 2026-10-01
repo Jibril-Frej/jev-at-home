@@ -101,7 +101,7 @@ Remove `--exclude 'pytorch/*'` to also get the PyTorch weights of the fp32 model
 
 ## API
 
-The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questions` object;
+The API is the Jev one. A request has a `state` and a non-empty `questions` object;
 `model` (echoed back) and `options` are optional.
 
 | Question type | `criteria` | Answer |
@@ -111,9 +111,8 @@ The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questi
 | `score` | list of level descriptions, 1–255 levels | `score` (expected level, 0-based), `legend`, `probabilities`, `confidence` |
 
 - **Confidence.** For `choice`, confidence is `(p_max - 1/k) / (1 - 1/k)`. For `score`, it is 1 minus the expected
-  distance from the most probable level, normalised by `k - 1`. Probabilities are rounded to 2 decimals, as in
-  Jeeves.
-- **Errors.** An invalid request returns `422 {"detail": "..."}`, with the same checks and messages as Jeeves; an unknown path returns `404`.
+  distance from the most probable level, normalised by `k - 1`. Probabilities are rounded to 2 decimals.
+- **Errors.** An invalid request returns `422 {"detail": "..."}` with a message saying what is wrong; an unknown path returns `404`.
 - **Several questions per request.** Each question is one forward pass. E reads the state separately from the questions (a bi-encoder, see
   Model details), so it encodes the state once per request, then only the questions.
 - **One request at a time.** Requests are served in order on one model instance; for more throughput, run
@@ -447,4 +446,4 @@ What this shows:
   non-commercial or share-alike; see the dataset card.
 - **Code:** MIT (see [LICENSE](LICENSE)).
 
-This is an independent project. It is not affiliated with TypeSafe AI (Jev), PostHog (Jeeves) or Convai (Laya).
+This is an independent project. It is not affiliated with TypeSafe AI (Jev) or Convai (Laya).

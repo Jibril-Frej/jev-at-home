@@ -1,10 +1,10 @@
-//! HTTP API compatible with Jev / Jeeves (PostHog/jeeves inference/serve.py and inference/api.py):
+//! HTTP API compatible with Jev:
 //! POST /v1/systemone {state, questions: {name: {type, instructions, criteria}}, model?, options?}
 //!   -> {model, answers: {name: answer}, usage, latency_ms}
 //! GET /v1/models -> {models: [...]}
 //! Same validation, answer fields, rounding and error codes (422 {"detail"}; 404 unknown path). The reasoning
 //! options are accepted and ignored: these models answer in one forward pass per question, without reasoning.
-//! One request at a time (the model is not shared between threads), like the Jeeves server's lock.
+//! One request at a time (the model is not shared between threads).
 use std::path::Path;
 use std::time::Instant;
 
@@ -54,12 +54,12 @@ fn rss_mb() -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Python round(x, 2): the exact binary value rounded to 2 decimals.
+/// Round to 2 decimals, from the exact binary value.
 fn r2(x: f64) -> f64 {
     format!("{x:.2}").parse().unwrap()
 }
 
-/// Python repr of a str / list of str (error messages as the Jeeves server writes them).
+/// Quoted string / list of strings for error messages: 'a', ['a', 'b'].
 fn pyr(s: &str) -> String {
     format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
 }
@@ -68,12 +68,12 @@ fn pyr_list(v: &[&str]) -> String {
     format!("[{}]", v.iter().map(|s| pyr(s)).collect::<Vec<_>>().join(", "))
 }
 
-/// Index of the first maximum (Python max(range(n), key=p.__getitem__)).
+/// Index of the first maximum (ties go to the first option).
 fn argmax(p: &[f64]) -> usize {
     (0..p.len()).fold(0, |b, i| if p[i] > p[b] { i } else { b })
 }
 
-/// inference.api.parse_options: only these keys, with these types. The values change nothing here.
+/// Request options: only these keys, with these types. The values change nothing here.
 fn check_options(raw: &Value) -> Result<(), String> {
     if raw.is_null() {
         return Ok(());
@@ -96,7 +96,7 @@ fn check_options(raw: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// inference.api.parse_question
+/// Check one question and its criteria.
 fn check_question(qid: &str, raw: &Value) -> Result<(), String> {
     let o = raw.as_object().ok_or(format!("question {} must be an object", pyr(qid)))?;
     let kind = o.get("type").and_then(Value::as_str).unwrap_or("");
@@ -123,7 +123,7 @@ fn check_question(qid: &str, raw: &Value) -> Result<(), String> {
     }
 }
 
-/// inference.api.answer. Our option order: noul [true, false], choice in criteria order, score by level.
+/// Answer fields of one question. Our option order: noul [true, false], choice in criteria order, score by level.
 fn answer(r: &Request, q: &Value, p: &[f32]) -> Value {
     let p: Vec<f64> = p.iter().map(|&x| x as f64).collect();
     let k = p.len();
@@ -202,7 +202,7 @@ pub fn main(a: &[String]) -> Result<()> {
     let name = dir.canonicalize()?.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let t0 = Instant::now();
     let mut m = Model::load(dir, threads)?;
-    // one warm-up decision, like the Jeeves server, so the first request is not the slow one
+    // one warm-up decision, so the first request is not the slow one
     m.decide_many(&json!("warmup"), &[&json!({"type": "noul", "instructions": "Is this a warmup?"})])?;
     let load_s = t0.elapsed().as_secs_f64();
     let addr = format!("{}:{}", args.host, args.port);
