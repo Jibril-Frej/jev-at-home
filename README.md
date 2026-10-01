@@ -15,6 +15,7 @@ Open typed-decision models that run in real time on a plain CPU, with little mem
 - [The models](#the-models)
 - [Quick start](#quick-start)
 - [API](#api)
+- [Compare the models](#compare-the-models)
 - [Model details](#model-details)
   - [How the models compute probabilities](#how-the-models-compute-probabilities)
   - [Speed and memory (CPU, 4 threads)](#speed-and-memory-cpu-4-threads)
@@ -121,6 +122,62 @@ The API is the Jev / Jeeves one. A request has a `state` and a non-empty `questi
 
 `--threads N` sets how many CPU cores one decision uses (default 4, the setting of every number
 below). More threads help mostly on long inputs; on a small VM use 1 or 2.
+
+## Compare the models
+
+`scripts/compare_models.py` asks the same questions about several states with every model in `models/`
+and prints one table per question: one row per state, one column per model.
+A cell shows the `noul` value, the `score`, or the most likely `choice` with its probability.
+Each model is loaded, asked every state, then stopped, so only one model is in memory at a time.
+
+```bash
+python3 scripts/compare_models.py scripts/compare_cases.json   # also saves the tables to scripts/compare_cases.results.md
+```
+
+The cases file gives each state a short name, and one `questions` object in the API format:
+
+```json
+{"states":    {"calm": "Hi, I think I was charged twice ...", "furious": "UNACCEPTABLE. You charged me TWICE ..."},
+ "questions": {"frustration": {"type": "score", "instructions": "How frustrated is the customer?",
+                               "criteria": ["calm", "slightly annoyed", "frustrated", "furious"]}}}
+```
+
+Results of [scripts/compare_cases.json](scripts/compare_cases.json) (the Quick start ticket, written at four levels of frustration):
+
+**department** (choice)
+
+| state | Ettin-1B | L | B | E | Ettin-1B int8 | L int8 | B int8 | E int8 |
+|---|---|---|---|---|---|---|---|---|
+| calm | billing (0.93) | billing (0.92) | billing (0.88) | billing (0.77) | billing (0.94) | billing (0.90) | billing (0.85) | billing (0.77) |
+| slightly_annoyed | billing (0.89) | billing (0.93) | billing (0.82) | billing (0.63) | billing (0.79) | billing (0.93) | billing (0.93) | billing (0.56) |
+| frustrated | billing (0.95) | billing (0.96) | billing (0.86) | billing (0.51) | billing (0.90) | billing (0.96) | billing (0.82) | billing (0.49) |
+| furious | billing (0.98) | billing (0.95) | billing (0.97) | billing (0.64) | billing (0.96) | billing (0.98) | billing (0.95) | billing (0.73) |
+
+**escalate** (noul)
+
+| state | Ettin-1B | L | B | E | Ettin-1B int8 | L int8 | B int8 | E int8 |
+|---|---|---|---|---|---|---|---|---|
+| calm | 0.52 | 0.50 | 0.34 | 0.44 | 0.49 | 0.50 | 0.54 | 0.45 |
+| slightly_annoyed | 0.68 | 0.56 | 0.54 | 0.45 | 0.68 | 0.38 | 0.59 | 0.42 |
+| frustrated | 0.75 | 0.59 | 0.52 | 0.39 | 0.76 | 0.65 | 0.46 | 0.35 |
+| furious | 0.80 | 0.80 | 0.49 | 0.43 | 0.77 | 0.61 | 0.57 | 0.43 |
+
+**frustration** (score: 0 = calm, 3 = furious)
+
+| state | Ettin-1B | L | B | E | Ettin-1B int8 | L int8 | B int8 | E int8 |
+|---|---|---|---|---|---|---|---|---|
+| calm | 1.28 | 1.26 | 1.08 | 1.49 | 1.29 | 1.15 | 1.31 | 1.57 |
+| slightly_annoyed | 1.95 | 2.01 | 1.74 | 1.61 | 1.99 | 2.04 | 1.81 | 1.61 |
+| frustrated | 2.45 | 2.41 | 2.14 | 1.75 | 2.38 | 2.10 | 2.17 | 1.88 |
+| furious | 2.64 | 2.68 | 2.41 | 1.77 | 2.62 | 2.59 | 2.15 | 1.79 |
+
+What this shows:
+
+- All models send every version to billing; the larger ones are more confident.
+- Ettin-1B, L and B put the four frustration levels in the right order, but the scores stay away from the ends
+  (about 1.1–1.3 for calm, 2.4–2.7 for furious): the score is the probability-weighted average level, so
+  spread-out probabilities pull it towards the middle. E barely separates the levels.
+- `escalate` rises with frustration for Ettin-1B and L; B and E stay between about 0.35 and 0.6.
 
 ## Model details
 
